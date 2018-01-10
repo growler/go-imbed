@@ -174,42 +174,43 @@ func (d *directoryAsset) Open(name string) (File, error) {
 	p := path.Clean(name)
 	if p == "." {
 		return &directoryAssetFile{dir: d}, nil
+	} else if name[0] == '/' {
+		name = name[1:]
+	}
+	var first, rest string
+	i := strings.IndexByte(p, '/')
+	if i == -1 {
+		first = p
 	} else {
-		var first, rest string
-		i := strings.IndexByte(p, '/')
-		if i == -1 {
-			first = p
-		} else {
-			first = p[:i]
-			rest = p[i+1:]
-		}
-		for j := range d.dirs {
-			if d.dirs[j].name == first {
-				if rest == "" {
-					return &directoryAssetFile{dir: &d.dirs[j]}, nil
-				} else {
-					return d.dirs[j].Open(rest)
-				}
+		first = p[:i]
+		rest = p[i+1:]
+	}
+	for j := range d.dirs {
+		if d.dirs[j].name == first {
+			if rest == "" {
+				return &directoryAssetFile{dir: &d.dirs[j]}, nil
+			} else {
+				return d.dirs[j].Open(rest)
 			}
 		}
-		if rest != "" {
-			return nil, os.ErrNotExist
-		}
-		for j := range d.files {
-			if d.files[j].name == first {
-				if d.files[j].isCompressed {
-					ret := &assetCompressedFile{asset: &d.files[j]}
-					ret.Reset(bytes.NewReader(d.files[j].blob))
-					return ret, nil
-				} else {
-					ret := &assetFile{asset: &d.files[j]}
-					ret.Reset(d.files[j].blob)
-					return ret, nil
-				}
-			}
-		}
+	}
+	if rest != "" {
 		return nil, os.ErrNotExist
 	}
+	for j := range d.files {
+		if d.files[j].name == first {
+			if d.files[j].isCompressed {
+				ret := &assetCompressedFile{asset: &d.files[j]}
+				ret.Reset(bytes.NewReader(d.files[j].blob))
+				return ret, nil
+			} else {
+				ret := &assetFile{asset: &d.files[j]}
+				ret.Reset(d.files[j].blob)
+				return ret, nil
+			}
+		}
+	}
+	return nil, os.ErrNotExist
 }
 
 type directoryAssetFile struct {
@@ -345,7 +346,7 @@ var idx = make(map[string]*Asset)
 var stamp time.Time
 
 func init() {
-	stamp = time.Unix(1515560467,887731000)
+	stamp = time.Unix(1515566723,817118000)
 	bb := blob_bytes(66432)
 	bs := blob_string(66432)
 	root = &directoryAsset{

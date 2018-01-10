@@ -14,8 +14,10 @@ import (
 {{- if or .Params.BuildHttpFsAPI .Params.BuildHttpHelperAPI }}
 	"net/http"
 {{- end }}
-{{- if or .Params.BuildFsAPI }}
+{{- if or .Params.BuildFsAPI .Params.BuildHttpHelperAPI }}
 	"strings"
+{{- end }}
+{{- if .Params.BuildFsAPI }}
 	"path"
 {{- end }}
 {{- if or .Params.BuildHttpHelperAPI .Params.BuildFsAPI .Params.CompressAssets }}
@@ -224,46 +226,47 @@ func (d *directoryAsset) Open(name string) (File, error) {
 	p := path.Clean(name)
 	if p == "." {
 		return &directoryAssetFile{dir: d}, nil
+	} else if name[0] == '/' {
+		name = name[1:]
+	}
+	var first, rest string
+	i := strings.IndexByte(p, '/')
+	if i == -1 {
+		first = p
 	} else {
-		var first, rest string
-		i := strings.IndexByte(p, '/')
-		if i == -1 {
-			first = p
-		} else {
-			first = p[:i]
-			rest = p[i+1:]
-		}
-		for j := range d.dirs {
-			if d.dirs[j].name == first {
-				if rest == "" {
-					return &directoryAssetFile{dir: &d.dirs[j]}, nil
-				} else {
-					return d.dirs[j].Open(rest)
-				}
+		first = p[:i]
+		rest = p[i+1:]
+	}
+	for j := range d.dirs {
+		if d.dirs[j].name == first {
+			if rest == "" {
+				return &directoryAssetFile{dir: &d.dirs[j]}, nil
+			} else {
+				return d.dirs[j].Open(rest)
 			}
 		}
-		if rest != "" {
-			return nil, os.ErrNotExist
-		}
-		for j := range d.files {
-			if d.files[j].name == first {
-{{- if .Params.CompressAssets }}
-				if d.files[j].isCompressed {
-					ret := &assetCompressedFile{asset: &d.files[j]}
-					ret.Reset(bytes.NewReader(d.files[j].blob))
-					return ret, nil
-				} else {
-{{- end }}
-					ret := &assetFile{asset: &d.files[j]}
-					ret.Reset(d.files[j].blob)
-					return ret, nil
-{{- if .Params.CompressAssets }}
-				}
-{{- end }}
-			}
-		}
+	}
+	if rest != "" {
 		return nil, os.ErrNotExist
 	}
+	for j := range d.files {
+		if d.files[j].name == first {
+{{- if .Params.CompressAssets }}
+			if d.files[j].isCompressed {
+				ret := &assetCompressedFile{asset: &d.files[j]}
+				ret.Reset(bytes.NewReader(d.files[j].blob))
+				return ret, nil
+			} else {
+{{- end }}
+				ret := &assetFile{asset: &d.files[j]}
+				ret.Reset(d.files[j].blob)
+				return ret, nil
+{{- if .Params.CompressAssets }}
+			}
+{{- end }}
+		}
+	}
+	return nil, os.ErrNotExist
 }
 
 type directoryAssetFile struct {

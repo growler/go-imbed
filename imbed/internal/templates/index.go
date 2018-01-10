@@ -163,42 +163,43 @@ func (d *directoryAsset) Open(name string) (File, error) {
 	p := path.Clean(name)
 	if p == "." {
 		return &directoryAssetFile{dir: d}, nil
+	} else if name[0] == '/' {
+		name = name[1:]
+	}
+	var first, rest string
+	i := strings.IndexByte(p, '/')
+	if i == -1 {
+		first = p
 	} else {
-		var first, rest string
-		i := strings.IndexByte(p, '/')
-		if i == -1 {
-			first = p
-		} else {
-			first = p[:i]
-			rest = p[i+1:]
-		}
-		for j := range d.dirs {
-			if d.dirs[j].name == first {
-				if rest == "" {
-					return &directoryAssetFile{dir: &d.dirs[j]}, nil
-				} else {
-					return d.dirs[j].Open(rest)
-				}
+		first = p[:i]
+		rest = p[i+1:]
+	}
+	for j := range d.dirs {
+		if d.dirs[j].name == first {
+			if rest == "" {
+				return &directoryAssetFile{dir: &d.dirs[j]}, nil
+			} else {
+				return d.dirs[j].Open(rest)
 			}
 		}
-		if rest != "" {
-			return nil, os.ErrNotExist
-		}
-		for j := range d.files {
-			if d.files[j].name == first {
-				if d.files[j].isCompressed {
-					ret := &assetCompressedFile{asset: &d.files[j]}
-					ret.Reset(bytes.NewReader(d.files[j].blob))
-					return ret, nil
-				} else {
-					ret := &assetFile{asset: &d.files[j]}
-					ret.Reset(d.files[j].blob)
-					return ret, nil
-				}
-			}
-		}
+	}
+	if rest != "" {
 		return nil, os.ErrNotExist
 	}
+	for j := range d.files {
+		if d.files[j].name == first {
+			if d.files[j].isCompressed {
+				ret := &assetCompressedFile{asset: &d.files[j]}
+				ret.Reset(bytes.NewReader(d.files[j].blob))
+				return ret, nil
+			} else {
+				ret := &assetFile{asset: &d.files[j]}
+				ret.Reset(d.files[j].blob)
+				return ret, nil
+			}
+		}
+	}
+	return nil, os.ErrNotExist
 }
 
 type directoryAssetFile struct {
@@ -334,24 +335,24 @@ var idx = make(map[string]*Asset)
 var stamp time.Time
 
 func init() {
-	stamp = time.Unix(1515560467,162862000)
-	bb := blob_bytes(5472)
-	bs := blob_string(5472)
+	stamp = time.Unix(1515566723,108270000)
+	bb := blob_bytes(5480)
+	bs := blob_string(5480)
 	root = &directoryAsset{
 		files: []Asset{
 			{
 				name:         "index.go",
-				blob:         bb[0:3784],
-				str_blob:     bs[0:3784],
+				blob:         bb[0:3785],
+				str_blob:     bs[0:3785],
 				mime:         "text/x-golang; charset=utf-8",
-				tag:          "t2uskxucxck66",
-				size:         13115,
+				tag:          "ptwne6wzgpxew",
+				size:         13184,
 				isCompressed: true,
 			},
 			{
 				name:         "index_386.s",
-				blob:         bb[3784:3981],
-				str_blob:     bs[3784:3981],
+				blob:         bb[3792:3989],
+				str_blob:     bs[3792:3989],
 				mime:         "text/x-asm; charset=utf-8",
 				tag:          "ihibzfvzsneuc",
 				size:         327,
@@ -359,8 +360,8 @@ func init() {
 			},
 			{
 				name:         "index_amd64.s",
-				blob:         bb[3984:4192],
-				str_blob:     bs[3984:4192],
+				blob:         bb[3992:4200],
+				str_blob:     bs[3992:4200],
 				mime:         "text/x-asm; charset=utf-8",
 				tag:          "dcfwghvd5ccho",
 				size:         361,
@@ -368,8 +369,8 @@ func init() {
 			},
 			{
 				name:         "index_arm.s",
-				blob:         bb[4192:4384],
-				str_blob:     bs[4192:4384],
+				blob:         bb[4200:4392],
+				str_blob:     bs[4200:4392],
 				mime:         "text/x-asm; charset=utf-8",
 				tag:          "37iklflan4xc4",
 				size:         327,
@@ -377,8 +378,8 @@ func init() {
 			},
 			{
 				name:         "index_arm64.s",
-				blob:         bb[4384:4583],
-				str_blob:     bs[4384:4583],
+				blob:         bb[4392:4591],
+				str_blob:     bs[4392:4591],
 				mime:         "text/x-asm; charset=utf-8",
 				tag:          "slzknys4x76m2",
 				size:         329,
@@ -386,8 +387,8 @@ func init() {
 			},
 			{
 				name:         "index_mips64x.s",
-				blob:         bb[4584:4805],
-				str_blob:     bs[4584:4805],
+				blob:         bb[4592:4813],
+				str_blob:     bs[4592:4813],
 				mime:         "text/x-asm; charset=utf-8",
 				tag:          "fu6srp6typnuy",
 				size:         368,
@@ -395,8 +396,8 @@ func init() {
 			},
 			{
 				name:         "index_mipsx.s",
-				blob:         bb[4808:5026],
-				str_blob:     bs[4808:5026],
+				blob:         bb[4816:5034],
+				str_blob:     bs[4816:5034],
 				mime:         "text/x-asm; charset=utf-8",
 				tag:          "ev3x2mivyfazw",
 				size:         362,
@@ -404,8 +405,8 @@ func init() {
 			},
 			{
 				name:         "index_ppc64x.s",
-				blob:         bb[5032:5246],
-				str_blob:     bs[5032:5246],
+				blob:         bb[5040:5254],
+				str_blob:     bs[5040:5254],
 				mime:         "text/x-asm; charset=utf-8",
 				tag:          "uvrbimoxyzy3a",
 				size:         354,
@@ -413,8 +414,8 @@ func init() {
 			},
 			{
 				name:         "index_s390x.s",
-				blob:         bb[5248:5465],
-				str_blob:     bs[5248:5465],
+				blob:         bb[5256:5473],
+				str_blob:     bs[5256:5473],
 				mime:         "text/x-asm; charset=utf-8",
 				tag:          "kyrcf7qm7xney",
 				size:         311,
