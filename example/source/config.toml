@@ -1,0 +1,9 @@
+baseURL = "/"
+title = "go-imbed demo"
+theme = "simple"
+staticDir = "static"
+
+[[menu.top]]
+    name = "go-imbed sources"
+    weight = 10
+    url = "https://github.com/growler/go-imbed"

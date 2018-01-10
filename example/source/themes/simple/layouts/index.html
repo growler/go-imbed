@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html id="html" lang="{{ with .Site.LanguageCode }}{{ . }}{{ else }}en-US{{ end }}">
+<head>
+    <meta http-equiv="content-type" content="text/html;charset=utf-8">
+    <meta name="viewport" content="width=device-width"/>
+    <title>{{ .Site.Title }}</title>
+    <meta name="description" content="{{ with .Site.Params.description }}{{ . }}{{ end }}">
+    <meta name="author" content="{{ with .Site.Params.author }}{{ . }}{{ end }}">
+    <link rel="stylesheet" href="css/style.css" />
+    {{ .Hugo.Generator }}
+</head>
+
+<body>
+    <section id="Menu">
+        <header>
+            <h1>{{ with .Site.Params.headerTitle }}{{ . | markdownify }}{{ else }}{{ .Site.Title }}{{ end }}</h1>
+            <p>{{ with .Site.Params.headerDescription }}{{ . | markdownify }}{{ else }}{{ .Site.Params.description }}{{ end }}</p>
+        </header>
+        <nav>
+        {{ range .Site.Menus.top }}
+            <a href="{{.URL}}" target="blank">{{ .Name }}</a>
+        {{ end }}
+        </nav>
+        <nav>
+        {{ range .Data.Pages.ByWeight }}
+            <a href="#{{ .Params.anchor }}">{{ .Title }}</a>
+        {{ end }}
+        </nav>
+    </section>
+    
+    {{ range .Data.Pages.ByWeight }}
+    
+    <section id="{{ .Params.anchor }}">
+
+        <h1><a href="#{{ .Params.anchor }}">{{ .Title }}</a><small><a href="#html">{{ with .Site.Params.bttButton }}{{ . | markdownify }}{{ else }}Back to Top{{ end }}</a></small></h1>
+
+        {{ .Content }}
+
+    </section>
+    
+    {{ end }}
+</body>
+</html> 

@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html id="html" lang="en-US">
+<head>
+    <meta http-equiv="content-type" content="text/html;charset=utf-8">
+    <meta name="viewport" content="width=device-width"/>
+    <title>go-imbed demo</title>
+    <meta name="description" content="">
+    <meta name="author" content="">
+    <link rel="stylesheet" href="css/style.css" />
+    <meta name="generator" content="Hugo 0.32.3" />
+</head>
+
+<body>
+    <section id="Menu">
+        <header>
+            <h1>go-imbed demo</h1>
+            <p></p>
+        </header>
+        <nav>
+        
+            <a href="https://github.com/growler/go-imbed" target="blank">go-imbed sources</a>
+        
+        </nav>
+        <nav>
+        
+            <a href="#go-imbed">go-imbed</a>
+        
+            <a href="#getting-started">Getting Started</a>
+        
+            <a href="#other-tools">Other embedding tools</a>
+        
+            <a href="#credits-and-thanks">Credits and Thanks</a>
+        
+            <a href="#a-nice-picture">Just a nice, peaceful picture</a>
+        
+            <a href="#license">License</a>
+        
+        </nav>
+    </section>
+    
+    
+    
+    <section id="go-imbed">
+
+        <h1><a href="#go-imbed">go-imbed</a><small><a href="#html">Back to Top</a></small></h1>
+
+        
+
+<p><code>go-imbed</code> is a simple Go source generator to embed binary resources into Go executable.</p>
+
+<h2 id="why">Why</h2>
+
+<p><code>go-imbed</code> came up as a holiday side project for a very simple case of embedding a REST API documentation into the executable image. There are <a href="#other-tools">plenty of tools</a> for embedding binary assets into executable  (which clearly shows demand for something what Go lacks at the moment), but hey, why not invent another wheel? Besides, stuffing binary asset into Go source file seemed too unaesthetic to me.</p>
+
+
+    </section>
+    
+    
+    
+    <section id="getting-started">
+
+        <h1><a href="#getting-started">Getting Started</a><small><a href="#html">Back to Top</a></small></h1>
+
+        
+
+<h2 id="installation">Installation</h2>
+
+<pre><code class="language-text">$ go get -u github.com/growler/go-imbed
+</code></pre>
+
+<h2 id="usage">Usage</h2>
+
+<ol>
+<li><p>Install <code>go-imbed</code>:</p>
+
+<pre><code>go get -u github.com/growler/go-imbed
+
+</code></pre></li>
+
+<li><p>Add a static content tree to target package:</p>
+
+<pre><code>src
+└── yourpackage
+    ├── code.go
+    └── site
+        ├── static
+        │   └── style.css
+        ├── index.html
+        └── 404.html
+</code></pre></li>
+
+<li><p>Add a go-generate comment to <code>code.go</code> (or any other Go file in <code>yourpackage</code>):</p>
+
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go">    <span style="color:#75715e">//go:generate go-imbed site internal/site
+</span><span style="color:#75715e"></span>    
+    <span style="color:#f92672">package</span> <span style="color:#f92672">...</span>
+    </code></pre></div></li>
+
+<li><p>Run <code>go generate yourpackage</code></p></li>
+
+<li><p>Start using it:</p>
+
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-go" data-lang="go">    <span style="color:#f92672">package</span> <span style="color:#a6e22e">main</span> 
+
+    <span style="color:#f92672">import</span> (
+        <span style="color:#e6db74">&#34;net/http&#34;</span>
+        <span style="color:#e6db74">&#34;fmt&#34;</span>
+        <span style="color:#e6db74">&#34;yourpackage/internal/site&#34;</span>
+    )
+
+    <span style="color:#66d9ef">func</span> <span style="color:#a6e22e">main</span>() {
+    	<span style="color:#a6e22e">http</span>.<span style="color:#a6e22e">HandleFunc</span>(<span style="color:#e6db74">&#34;/&#34;</span>, <span style="color:#a6e22e">site</span>.<span style="color:#a6e22e">ServeHTTP</span>)
+    	<span style="color:#66d9ef">if</span> <span style="color:#a6e22e">err</span> <span style="color:#f92672">:=</span> <span style="color:#a6e22e">http</span>.<span style="color:#a6e22e">ListenAndServe</span>(<span style="color:#e6db74">&#34;:9091&#34;</span>, <span style="color:#66d9ef">nil</span>); <span style="color:#a6e22e">err</span> <span style="color:#f92672">!=</span> <span style="color:#66d9ef">nil</span> {
+    		<span style="color:#a6e22e">fmt</span>.<span style="color:#a6e22e">Println</span>(<span style="color:#a6e22e">err</span>)   
+ 		}
+    }
+    </code></pre></div></li>
+</ol>
+
+
+    </section>
+    
+    
+    
+    <section id="other-tools">
+
+        <h1><a href="#other-tools">Other embedding tools</a><small><a href="#html">Back to Top</a></small></h1>
+
+        <p>There are plenty of other tools to consider before starting using <code>go-imbed</code>:</p>
+
+<ul>
+<li><a href="https://github.com/jteeuwen/go-bindata">go-bindata</a></li>
+<li><a href="https://github.com/rakyll/statik">statik</a></li>
+<li><a href="https://github.com/mjibson/esc">esc</a></li>
+<li><a href="https://github.com/GeertJohan/go.rice">go.rice</a></li>
+<li><a href="https://github.com/gobuffalo/packr">packr</a></li>
+</ul>
+
+
+    </section>
+    
+    
+    
+    <section id="credits-and-thanks">
+
+        <h1><a href="#credits-and-thanks">Credits and Thanks</a><small><a href="#html">Back to Top</a></small></h1>
+
+        <p>Many thanks go to:</p>
+
+<ul>
+<li><a href="https://github.com/tonsky">Nikita Prokopov</a> for the <a href="https://github.com/tonsky/FiraCode">best free font for programmers</a></li>
+<li><a href="https://www.jetbrains.com">JetBrains</a> for the <a href="https://www.jetbrains.com/go/">best Go IDE</a></li>
+<li><a href="https://github.com/gohugoio/hugo">Hugo</a> for static site generating engine</li>
+<li><a href="https://github.com/aerohub">Pavel Kanyshev</a> for <a href="https://github.com/aerohub/hugo-simpledoc-theme">hugo-simpledoc-theme</a></li>
+</ul>
+
+
+    </section>
+    
+    
+    
+    <section id="a-nice-picture">
+
+        <h1><a href="#a-nice-picture">Just a nice, peaceful picture</a><small><a href="#html">Back to Top</a></small></h1>
+
+        
+<figure class="centered-picture">
+    
+        <img src="images/a-nice-picture.jpg" alt="Croatia, 2013" />
+    
+    
+    <figcaption>
+        <p>
+        Croatia, 2013
+        
+            
+        
+        </p> 
+    </figcaption>
+    
+</figure>
+
+
+
+    </section>
+    
+    
+    
+    <section id="license">
+
+        <h1><a href="#license">License</a><small><a href="#html">Back to Top</a></small></h1>
+
+        <p>The MIT License (MIT)</p>
+
+<p>Copyright &copy; 2017 Alexey Naidyonov</p>
+
+<p>Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the &ldquo;Software&rdquo;), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:</p>
+
+<p>The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.</p>
+
+<p>THE SOFTWARE IS PROVIDED &ldquo;AS IS&rdquo;, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.</p>
+
+
+    </section>
+    
+    
+</body>
+</html> 
