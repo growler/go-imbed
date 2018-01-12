@@ -3,14 +3,14 @@
 #include "textflag.h"
 
 TEXT ·blob_bytes(SB),NOSPLIT|NOFRAME,$0-8
-	MOVD	·d(SB), R0
+	MOVD	$·d(SB), R0
 	MOVW	len+0(FP), R1
 	MOVD	R1, R2
 	STMG	R0, R2, ret+8(FP)
 	JMP	R14
 
 TEXT ·blob_string(SB),NOSPLIT|NOFRAME,$0-8
-	MOVD	·d(SB), R0
+	MOVD	$·d(SB), R0
 	MOVW	len+0(FP), R1
 	STMG	R0, R1, ret+8(FP)
 	JMP	R14

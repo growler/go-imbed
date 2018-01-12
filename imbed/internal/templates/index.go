@@ -504,9 +504,9 @@ var didx = make(map[string]*directoryAsset)
 var stamp time.Time
 
 func init() {
-	stamp = time.Unix(1515748901, 331611000)
-	bb := blob_bytes(9824)
-	bs := blob_string(9824)
+	stamp = time.Unix(1515753730, 60785000)
+	bb := blob_bytes(9832)
+	bs := blob_string(9832)
 	root = &directoryAsset{
 		files: []Asset{
 			{
@@ -538,62 +538,62 @@ func init() {
 			},
 			{
 				name:         "index_arm.s",
-				blob:         bb[5648:5840],
-				str_blob:     bs[5648:5840],
+				blob:         bb[5648:5841],
+				str_blob:     bs[5648:5841],
 				mime:         "text/x-asm; charset=utf-8",
-				tag:          "37iklflan4xc4",
-				size:         327,
-				isCompressed: true,
-			},
-			{
-				name:         "index_arm64.s",
-				blob:         bb[5840:6039],
-				str_blob:     bs[5840:6039],
-				mime:         "text/x-asm; charset=utf-8",
-				tag:          "slzknys4x76m2",
+				tag:          "2kykitl4umpta",
 				size:         329,
 				isCompressed: true,
 			},
 			{
-				name:         "index_mips64x.s",
-				blob:         bb[6040:6261],
-				str_blob:     bs[6040:6261],
+				name:         "index_arm64.s",
+				blob:         bb[5848:6048],
+				str_blob:     bs[5848:6048],
 				mime:         "text/x-asm; charset=utf-8",
-				tag:          "fu6srp6typnuy",
-				size:         368,
+				tag:          "xsewb4p6f52nu",
+				size:         331,
+				isCompressed: true,
+			},
+			{
+				name:         "index_mips64x.s",
+				blob:         bb[6048:6270],
+				str_blob:     bs[6048:6270],
+				mime:         "text/x-asm; charset=utf-8",
+				tag:          "srpac746plm5g",
+				size:         370,
 				isCompressed: true,
 			},
 			{
 				name:         "index_mipsx.s",
-				blob:         bb[6264:6482],
-				str_blob:     bs[6264:6482],
+				blob:         bb[6272:6491],
+				str_blob:     bs[6272:6491],
 				mime:         "text/x-asm; charset=utf-8",
-				tag:          "ev3x2mivyfazw",
-				size:         362,
+				tag:          "itgddt77jfjk6",
+				size:         364,
 				isCompressed: true,
 			},
 			{
 				name:         "index_ppc64x.s",
-				blob:         bb[6488:6702],
-				str_blob:     bs[6488:6702],
+				blob:         bb[6496:6711],
+				str_blob:     bs[6496:6711],
 				mime:         "text/x-asm; charset=utf-8",
-				tag:          "uvrbimoxyzy3a",
-				size:         354,
+				tag:          "aatq7i5ygiqoy",
+				size:         356,
 				isCompressed: true,
 			},
 			{
 				name:         "index_s390x.s",
-				blob:         bb[6704:6921],
-				str_blob:     bs[6704:6921],
+				blob:         bb[6712:6930],
+				str_blob:     bs[6712:6930],
 				mime:         "text/x-asm; charset=utf-8",
-				tag:          "kyrcf7qm7xney",
-				size:         311,
+				tag:          "ml3wgknpogqt6",
+				size:         313,
 				isCompressed: true,
 			},
 			{
 				name:         "index_test.go",
-				blob:         bb[6928:9266],
-				str_blob:     bs[6928:9266],
+				blob:         bb[6936:9274],
+				str_blob:     bs[6936:9274],
 				mime:         "text/x-golang; charset=utf-8",
 				tag:          "3nfezi3r4tdnc",
 				size:         10851,
@@ -601,8 +601,8 @@ func init() {
 			},
 			{
 				name:         "main.go",
-				blob:         bb[9272:9820],
-				str_blob:     bs[9272:9820],
+				blob:         bb[9280:9828],
+				str_blob:     bs[9280:9828],
 				mime:         "text/x-golang; charset=utf-8",
 				tag:          "kvdrfuegv54xi",
 				size:         1114,

@@ -5,7 +5,7 @@
 #include "textflag.h"
 
 TEXT ·blob_bytes(SB),NOSPLIT,$0-8
-	MOVV	·d(SB), R1
+	MOVV	$·d(SB), R1
 	MOVV	R1, ret+8(FP)
 	MOVV	len+0(FP), R1
 	MOVV	R1, ret+16(FP)
@@ -13,7 +13,7 @@ TEXT ·blob_bytes(SB),NOSPLIT,$0-8
 	JMP	(R31)
 
 TEXT ·blob_string(SB),NOSPLIT,$0-8
-	MOVV	·d(SB), R1
+	MOVV	$·d(SB), R1
 	MOVV	R1, ret+8(FP)
 	MOVV	len+0(FP), R1
 	MOVV	R1, ret+16(FP)
