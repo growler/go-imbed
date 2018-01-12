@@ -7,7 +7,7 @@
 */
 package imbed
 
-//go:generate go run -tags bootstrap ../cmd.go --no-http-helper --filesystem _templates internal/templates
+//go:generate go run -tags bootstrap ../cmd.go --no-http-handler --fs _templates internal/templates
 
 import (
 	"bytes"
@@ -28,20 +28,6 @@ import (
 	"time"
 )
 
-// Embedding parameters
-type ImbedParams struct {
-	// Compress assets whenever possible
-	CompressAssets bool
-	// Build FileSystem API
-	BuildFsAPI bool
-	// Build http.FileSystem API
-	BuildHttpFsAPI bool
-	// Build http.Server helper API
-	BuildHttpHelperAPI bool
-	// Build raw data access API (dangerous)
-	BuildRawAccessAPI bool
-	has404Asset       bool
-}
 
 type directoryAsset struct {
 	name  string
@@ -59,14 +45,16 @@ type fileAsset struct {
 	offStop      int
 }
 
-func buildIndex(d *directoryAsset, params *ImbedParams) (string, string) {
+func buildIndex(d *directoryAsset, flags ImbedFlag) (string, string, bool) {
 	var dir bytes.Buffer
 	var index bytes.Buffer
 	addIndent(&dir, 1)
 	dir.WriteString("root = &directoryAsset")
-	buildDirIndex(params, &dir, &index, d, "", "root", 1)
+	addIndent(&index, 1)
+	index.WriteString("didx[\"\"] = root\n")
+	has404Asset := buildDirIndex(flags, &dir, &index, d, "", "root", 1)
 	dir.WriteRune('\n')
-	return dir.String(), index.String()
+	return dir.String(), index.String(), has404Asset
 }
 
 func addIndent(buf *bytes.Buffer, n int) {
@@ -75,7 +63,8 @@ func addIndent(buf *bytes.Buffer, n int) {
 	}
 }
 
-func buildDirIndex(params *ImbedParams, dir *bytes.Buffer, index *bytes.Buffer, d *directoryAsset, p, indexPrefix string, indent int) {
+func buildDirIndex(flags ImbedFlag, dir *bytes.Buffer, index *bytes.Buffer, d *directoryAsset, p, indexPrefix string, indent int) bool {
+	var has404Asset bool
 	dir.WriteString("{\n")
 	if d.name != "" {
 		addIndent(dir, indent+1)
@@ -86,7 +75,9 @@ func buildDirIndex(params *ImbedParams, dir *bytes.Buffer, index *bytes.Buffer, 
 		dir.WriteString("dirs: []directoryAsset{\n")
 		for i := range d.dirs {
 			addIndent(dir, indent+2)
-			buildDirIndex(params, dir, index, &d.dirs[i], path.Join(p, d.dirs[i].name), fmt.Sprintf("%s.dirs[%d]", indexPrefix, i), indent+2)
+			addIndent(index, 1)
+			fmt.Fprintf(index, "didx[\"%s\"] = &%s.dirs[%d]\n", path.Join(p, d.dirs[i].name), indexPrefix, i)
+			buildDirIndex(flags, dir, index, &d.dirs[i], path.Join(p, d.dirs[i].name), fmt.Sprintf("%s.dirs[%d]", indexPrefix, i), indent+2)
 			dir.WriteString(",\n")
 		}
 		addIndent(dir, indent+1)
@@ -98,18 +89,14 @@ func buildDirIndex(params *ImbedParams, dir *bytes.Buffer, index *bytes.Buffer, 
 		for i := range d.files {
 			fn := d.files[i].name
 			addIndent(dir, indent+2)
-			d.files[i].writeDefinition(dir, indent+2, params)
+			d.files[i].writeDefinition(dir, indent+2, flags)
 			dir.WriteString(",\n")
 			addIndent(index, 1)
-			fmt.Fprintf(index, "idx[\"%s\"] = &%s.files[%d]\n", path.Join(p, fn), indexPrefix, i)
-			if params.BuildHttpHelperAPI && (fn == "index.html" || fn == "index.htm") {
-				addIndent(index, 1)
-				fmt.Fprintf(index, "idx[\"%s\"] = &%s.files[%d]\n", p, indexPrefix, i)
-			}
-			if params.BuildHttpHelperAPI && p == "" && (fn == "404.html" || fn == "404.htm") {
+			fmt.Fprintf(index, "fidx[\"%s\"] = &%s.files[%d]\n", path.Join(p, fn), indexPrefix, i)
+			if flags.has(BuildHttpHandlerAPI) && p == "" && fn == "404.html" {
 				addIndent(index, 1)
 				fmt.Fprintf(index, "http404Asset = &%s.files[%d]\n", indexPrefix, i)
-				params.has404Asset = true
+				has404Asset = true
 			}
 		}
 		addIndent(dir, indent+1)
@@ -117,9 +104,10 @@ func buildDirIndex(params *ImbedParams, dir *bytes.Buffer, index *bytes.Buffer, 
 	}
 	addIndent(dir, indent)
 	dir.WriteString("}")
+	return has404Asset
 }
 
-func (f *fileAsset) writeDefinition(w *bytes.Buffer, ind int, params *ImbedParams) {
+func (f *fileAsset) writeDefinition(w *bytes.Buffer, ind int, flags ImbedFlag) {
 	fmt.Fprint(w, "{\n")
 	addIndent(w, ind+1)
 	fmt.Fprintf(w, "name:         \"%s\",\n", f.name)
@@ -133,7 +121,7 @@ func (f *fileAsset) writeDefinition(w *bytes.Buffer, ind int, params *ImbedParam
 	fmt.Fprintf(w, "tag:          \"%s\",\n", f.tag)
 	addIndent(w, ind+1)
 	fmt.Fprintf(w, "size:         %d,\n", f.size)
-	if params.CompressAssets {
+	if flags.has(CompressAssets) {
 		addIndent(w, ind+1)
 		fmt.Fprintf(w, "isCompressed: %v,\n", f.isCompressed)
 	}
@@ -197,7 +185,7 @@ func writeObjectFileFooter(file *os.File, size int) error {
 	return err
 }
 
-func (a *fileAsset) writeObject(input *os.File, output *os.File, start int, params *ImbedParams) (int, error) {
+func (a *fileAsset) writeObject(input *os.File, output *os.File, start int, flags ImbedFlag) (int, error) {
 	var compressor *gzip.Writer
 	var err error
 	if _, err := input.Seek(0, 0); err != nil {
@@ -236,8 +224,8 @@ func (a *fileAsset) writeObject(input *os.File, output *os.File, start int, para
 		pipeOut.Close()
 	}()
 	defer pipeIn.Close()
-	buf := [8]byte{}
-	_sbuf := [32]byte{}
+	var buf [8]byte
+	var _sbuf [32]byte
 	addr := start
 	size := 0
 	read := 0
@@ -275,19 +263,20 @@ func (a *fileAsset) writeObject(input *os.File, output *os.File, start int, para
 	return addr, nil
 }
 
-func writeGoIndex(file *os.File, pkg string, root *directoryAsset, addr int, params *ImbedParams) error {
+func writeGoIndex(file io.Writer, testFile io.Writer, pkg string, root *directoryAsset, addr int, flags ImbedFlag) error {
 	timestamp := time.Now()
-	dir, index := buildIndex(root, params)
+	dir, index, has404Asset := buildIndex(root, flags)
 	buf := bytes.Buffer{}
-	err := iMustHazTemplate("index.go").Execute(&buf, map[string]interface{}{
-		"Pkg":           path.Base(pkg),
+	params := map[string]interface{}{
+		"Pkg":           pkg,
 		"Size":          addr,
 		"IndexCode":     index,
 		"DirectoryCode": dir,
-		"Date":          fmt.Sprintf("%d,%d", timestamp.Unix(), timestamp.Nanosecond()),
-		"Params":        params,
-		"Has404Asset":   params.BuildHttpHelperAPI && params.has404Asset,
-	})
+		"Date":          fmt.Sprintf("%d, %d", timestamp.Unix(), timestamp.Nanosecond()),
+		"Params":        flags,
+		"Has404Asset":   flags.BuildHttpHandlerAPI() && has404Asset,
+	}
+	err := iMustHazTemplate("index.go").Execute(&buf, params)
 	if err != nil {
 		return err
 	}
@@ -296,6 +285,15 @@ func writeGoIndex(file *os.File, pkg string, root *directoryAsset, addr int, par
 		return err
 	}
 	_, err = file.Write(buf.Bytes())
+	if err != nil {
+		return err
+	}
+	buf.Reset()
+	err = iMustHazTemplate("index_test.go").Execute(&buf, params)
+	if err != nil {
+		return err
+	}
+	_, err = testFile.Write(buf.Bytes())
 	return err
 }
 
@@ -315,7 +313,7 @@ func writeAsmIndex(target string) error {
 			os.Remove(targetFile.Name())
 			return err
 		}
-		if err = os.Rename(targetFile.Name(), path.Join(target, file)); err != nil {
+		if err = os.Rename(targetFile.Name(), filepath.Join(target, file)); err != nil {
 			os.Remove(targetFile.Name())
 			return err
 		}
@@ -323,10 +321,25 @@ func writeAsmIndex(target string) error {
 	return nil
 }
 
-// Creates a Go package from `source` directory contents. Package name will
-// be basename (i.e. last element) of the `target` path.
-func Imbed(source, target string, params ImbedParams) error {
-	params.BuildFsAPI = params.BuildFsAPI || params.BuildHttpFsAPI
+func CopyBinaryTemplate(target string) error {
+	content := iMustHazFile("main.go")
+	dst, err := os.OpenFile(filepath.Join(target, "main.go"), os.O_CREATE | os.O_WRONLY, 0640)
+	if err != nil {
+		return err
+	}
+	defer dst.Close()
+	if _, err = dst.WriteString(content); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Creates a Go package `pkgName` from `source` directory contents and puts code
+// into `target` location.
+func Imbed(source, target, pkgName string, flags ImbedFlag) error {
+	if flags.has(BuildHttpFsAPI|BuildUnionFsAPI) {
+		flags |= BuildFsAPI
+	}
 	err := os.MkdirAll(target, 0755)
 	if err != nil {
 		return err
@@ -344,7 +357,18 @@ func Imbed(source, target string, params ImbedParams) error {
 	if err != nil {
 		return err
 	}
-	defer os.Remove(indexFile.Name())
+	defer func() {
+		indexFile.Close()
+		os.Remove(indexFile.Name())
+	}()
+	testFile, err := ioutil.TempFile(target, "index_test")
+	if err != nil {
+		return err
+	}
+	defer func() {
+		testFile.Close()
+		os.Remove(testFile.Name())
+	}()
 	addr := 0
 	root := &directoryAsset{}
 	err = filepath.Walk(source, func(asset string, info os.FileInfo, err error) error {
@@ -368,7 +392,7 @@ func Imbed(source, target string, params ImbedParams) error {
 			m = "application/binary"
 		}
 		var compressed = false
-		if params.CompressAssets && (strings.HasPrefix(m, "text/") || strings.HasSuffix(m, "+xml") ||
+		if flags.CompressAssets() && (strings.HasPrefix(m, "text/") || strings.HasSuffix(m, "+xml") ||
 			strings.Contains(m, "javascript") || m == "application/xml") {
 			compressed = true
 		}
@@ -378,7 +402,7 @@ func Imbed(source, target string, params ImbedParams) error {
 			size:         fstat.Size(),
 			isCompressed: compressed,
 		}
-		addr, err = entry.writeObject(file, dataFile, addr, &params)
+		addr, err = entry.writeObject(file, dataFile, addr, flags)
 		if err != nil {
 			return err
 		}
@@ -386,23 +410,28 @@ func Imbed(source, target string, params ImbedParams) error {
 		return nil
 	})
 	if err != nil {
-		return nil
+		return err
 	}
 	err = writeObjectFileFooter(dataFile, addr)
 	if err != nil {
-		return nil
+		return err
 	}
-	err = writeGoIndex(indexFile, target, root, addr, &params)
+	err = writeGoIndex(indexFile, testFile, pkgName, root, addr, flags)
 	if err != nil {
 		return err
 	}
 	dataFile.Close()
 	indexFile.Close()
-	err = os.Rename(dataFile.Name(), path.Join(target, "data.s"))
+	testFile.Close()
+	err = os.Rename(dataFile.Name(), filepath.Join(target, "data.s"))
 	if err != nil {
 		return err
 	}
-	err = os.Rename(indexFile.Name(), path.Join(target, "index.go"))
+	err = os.Rename(indexFile.Name(), filepath.Join(target, "index.go"))
+	if err != nil {
+		return err
+	}
+	err = os.Rename(testFile.Name(), filepath.Join(target, "index_test.go"))
 	if err != nil {
 		return err
 	}

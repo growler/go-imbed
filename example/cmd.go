@@ -1,4 +1,4 @@
-//go:generate go run ../cmd.go --http-filesystem site internal/site
+//go:generate go run ../cmd.go --http-fs --union-fs --raw-bytes site internal/site
 
 package main
 

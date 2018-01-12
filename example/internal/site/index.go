@@ -6,14 +6,15 @@ package site
 import (
 	"os"
 	"io"
-	"path/filepath"
-	"io/ioutil"
-	"strconv"
-	"net/http"
-	"strings"
-	"path"
 	"bytes"
+	"path/filepath"
+	"strconv"
+	"sort"
+	"net/http"
+	"path"
+	"strings"
 	"compress/gzip"
+	"io/ioutil"
 	"time"
 )
 
@@ -38,6 +39,33 @@ func (a *Asset) Name() string       { return a.name }
 func (a *Asset) MimeType() string   { return a.mime }
 // IsCompressed returns true of asset has been compressed
 func (a *Asset) IsCompressed() bool { return a.isCompressed }
+// String returns (uncompressed, if necessary) content of asset as a string
+func (a *Asset) String() string {
+	if a.isCompressed {
+		ungzip, _ := gzip.NewReader(bytes.NewReader(a.blob))
+		ret, _ := ioutil.ReadAll(ungzip)
+		ungzip.Close()
+		return string(ret)
+	}
+	return a.str_blob
+}
+
+// Bytes returns (uncompressed) content of asset as a []byte
+func (a *Asset) Bytes() []byte {
+	if a.isCompressed {
+		ungzip, _ := gzip.NewReader(bytes.NewReader(a.blob))
+		ret, _ := ioutil.ReadAll(ungzip)
+		ungzip.Close()
+		return ret
+	}
+	ret := make([]byte, len(a.blob))
+	copy(ret, a.blob)
+	return ret
+}
+// RawBytes returns a raw byte slice of the asset. Changing content of slice will result into segfault.
+func (a *Asset) RawBytes() []byte {
+	return a.blob
+}
 
 // Size implements os.FileInfo and returns the size of the asset (uncompressed, if asset has been compressed)
 func (a *Asset) Size() int64        { return int64(a.size) }
@@ -48,56 +76,18 @@ func (a *Asset) ModTime() time.Time { return stamp }
 // IsDir implements os.FileInfo and returns false
 func (a *Asset) IsDir() bool        { return false }
 // Sys implements os.FileInfo and returns nil
-func (a *Asset) Sys() interface{}   { return nil }
+func (a *Asset) Sys() interface{}   { return a }
 
 // WriteTo implements io.WriterTo interface and writes content of the asset to w
 func (a *Asset) WriteTo(w io.Writer) (int64, error) {
 	if a.isCompressed {
 		ungzip, _ := gzip.NewReader(bytes.NewReader(a.blob))
-		defer ungzip.Close()
-		return io.Copy(w, ungzip)
+		n, err := io.Copy(w, ungzip)
+		ungzip.Close()
+		return n, err
 	}
 	n, err := w.Write(a.blob)
 	return int64(n), err
-}
-
-// The CopyTo method copies asset content to the target directory.
-// If file with the same name, size and modification time exists,
-// it will not be overwritten, unless overwrite = true is specified.
-func (a *Asset) CopyTo(target string, mode os.FileMode, overwrite bool) error {
-	fname := filepath.Join(target, a.name)
-	fs, err := os.Stat(fname)
-	if err == nil {
-		if fs.IsDir() {
-			return os.ErrExist
-		} else if !overwrite && fs.Size() == a.Size() && fs.ModTime().Equal(a.ModTime()) {
-			return nil
-		}
-	}
-	file, err := ioutil.TempFile(target, ".imbed")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(file.Name())
-	_, err = a.WriteTo(file)
-	if err != nil {
-		return err
-	}
-	file.Close()
-	os.Chtimes(file.Name(), a.ModTime(), a.ModTime())
-	os.Chmod(file.Name(), mode)
-	return os.Rename(file.Name(), fname)
-}
-
-// String returns (uncompressed) content of asset as a string
-func (a *Asset) String() string {
-	if a.isCompressed {
-		ungzip, _ := gzip.NewReader(bytes.NewReader(a.blob))
-		ret, _ := ioutil.ReadAll(ungzip)
-		ungzip.Close()
-		return string(ret)
-	}
-	return a.str_blob
 }
 
 type assetReader struct {
@@ -109,14 +99,39 @@ func (r *assetReader) Close() error {
 	return nil
 }
 
+// Returns content of the asset as io.ReaderCloser.
+func (a *Asset) Reader() io.ReadCloser {
+	if a.isCompressed {
+		ungzip, _ := gzip.NewReader(bytes.NewReader(a.blob))
+		return ungzip
+	} else {
+		ret := &assetReader{}
+		ret.Reset(a.blob)
+		return ret
+	}
+}
+
+func cleanPath(path string) string {
+	path = filepath.Clean(path)
+	if filepath.IsAbs(path) {
+		path = path[len(filepath.VolumeName(path)):]
+		if len(path) > 0 || os.IsPathSeparator(path[0]) {
+			path = path[1:]
+		}
+	} else if path == "." {
+		return ""
+	}
+	return filepath.ToSlash(path)
+}
+
 // Opens asset as an io.ReadCloser. Returns os.ErrNotExist if no asset is found.
 func Open(name string) (File, error) {
-	return root.Open(name)
+	return FS().Open(name)
 }
 
 // Gets asset by name. Returns nil if no asset found.
 func Get(name string) *Asset {
-	if entry, ok := idx[name]; ok {
+	if entry, ok := fidx[name]; ok {
 		return entry
 	} else {
 		return nil
@@ -125,7 +140,7 @@ func Get(name string) *Asset {
 
 // Get asset by name. Panics if no asset found.
 func Must(name string) *Asset {
-	if entry, ok := idx[name]; ok {
+	if entry, ok := fidx[name]; ok {
 		return entry
 	} else {
 		panic("asset " + name + " not found")
@@ -139,15 +154,191 @@ type directoryAsset struct {
 }
 
 var root *directoryAsset
-type httpFileSystem struct {}
 
-func (*httpFileSystem) Open(name string) (http.File, error) {
-	return root.Open(name)
+// A simple FileSystem abstraction
+type FileSystem interface {
+	Open(name string) (File, error)
+	Stat(name string) (os.FileInfo, error)
+	// As in filepath.Walk
+	Walk(root string, walkFunc filepath.WalkFunc) error
+    // Returns http.FileSystem interface to use with http.Server
+	HttpFileSystem() http.FileSystem
 }
 
-func HttpFileSystem() http.FileSystem {
-	return &httpFileSystem{}
+// The CopyTo method extracts all mentioned files
+// to a specified location, keeping directory structure.
+// If supplied file is a directory, than it will be extracted
+// recursively. CopyTo with no file mentioned will extract
+// the whole content of the embedded filesystem.
+// CopyTo returns error if there is a file with the same name
+// at the target location, unless overwrite is set to true, or
+// file has the same size and modification file as the extracted
+// file.
+// site.CopyTo(".", mode, false) will effectively
+// extract content of the filesystem to the current directory (which
+// makes it the most space-wise inefficient self-extracting archive
+// ever).
+func CopyTo(target string, mode os.FileMode, overwrite bool, files ...string) error {
+	mode    =  mode&0777
+	dirmode := os.ModeDir|((mode&0444)>>2)|mode
+	if len(files) == 0 {
+		files = []string{""}
+	}
+	for _, file := range files {
+		file = cleanPath(file)
+		err := FS().Walk(file, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			targetPath := filepath.Join(target, path)
+			fi, err := os.Stat(targetPath)
+			if err == nil {
+				if info.IsDir() && fi.IsDir() {
+					return nil
+				} else if info.IsDir() != fi.IsDir() {
+					return os.ErrExist
+				} else if !overwrite {
+					if info.Size() == fi.Size() && info.ModTime().Equal(fi.ModTime()) {
+						return nil
+					} else {
+						return os.ErrExist
+					}
+				}
+			}
+			if info.IsDir() {
+				return os.MkdirAll(targetPath, dirmode)
+			}
+			asset := Get(path)
+			if asset == nil {
+				return os.ErrNotExist
+			}
+			targetPathDir := filepath.Dir(targetPath)
+			if err = os.MkdirAll(targetPathDir, dirmode); err != nil {
+				return err
+			}
+			dst, err := ioutil.TempFile(targetPathDir, ".imbed")
+			if err != nil {
+				return err
+			}
+			defer func() {
+				dst.Close()
+				os.Remove(dst.Name())
+			}()
+			_, err = asset.WriteTo(dst)
+			if err != nil {
+				return err
+			}
+			dst.Close()
+			os.Chtimes(dst.Name(), info.ModTime(), info.ModTime())
+			os.Chmod(dst.Name(), mode)
+			return os.Rename(dst.Name(), targetPath)
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
+
+type fileInfoSlice []os.FileInfo
+func (fis *fileInfoSlice) Len() int           { return len(*fis) }
+func (fis *fileInfoSlice) Less(i, j int) bool { return (*fis)[i].Name() < (*fis)[j].Name() }
+func (fis *fileInfoSlice) Swap(i, j int) {
+	s := (*fis)[i]
+	(*fis)[i] = (*fis)[j]
+	(*fis)[j] = s
+}
+
+func walkRec(fs FileSystem, info os.FileInfo, p string, walkFn filepath.WalkFunc) error {
+	var (
+		dir File
+		fis fileInfoSlice
+		err error
+	)
+	err = walkFn(p, info, nil)
+	if err != nil {
+		if info.IsDir() && err == filepath.SkipDir {
+			return nil
+		}
+		return err
+	}
+	if !info.IsDir() {
+		return nil
+	}
+	dir, err = fs.Open(p)
+	if err != nil {
+		return walkFn(p, info, err)
+	}
+	fis, err = dir.Readdir(-1)
+	if err != nil {
+		return walkFn(p, info, err)
+	}
+	sort.Sort(&fis)
+	for i := range fis {
+		fn := path.Join(p, fis[i].Name())
+		err = walkRec(fs, fis[i], fn, walkFn)
+		if err != nil {
+			if !fis[i].IsDir() || err != filepath.SkipDir {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func walk(fs FileSystem, name string, walkFunc filepath.WalkFunc) error {
+	var r os.FileInfo
+	var err error
+	name = cleanPath(name)
+	r, err = fs.Stat(name)
+	if err != nil {
+		return err
+	}
+	return walkRec(fs, r, name, walkFunc)
+}
+
+type assetFs struct{}
+
+// Returns embedded FileSystem
+func FS() FileSystem {
+	return &assetFs{}
+}
+
+func (fs *assetFs) Walk(root string, walkFunc filepath.WalkFunc) error {
+	return walk(fs, root, walkFunc)
+}
+
+func (fs *assetFs) Stat(name string) (os.FileInfo, error) {
+	name = cleanPath(name)
+	if name == "" {
+		return root, nil
+	}
+	if dir, ok := didx[name]; ok {
+		return dir, nil
+	}
+	if asset, ok := fidx[name]; ok {
+		return asset, nil
+	}
+	return nil, os.ErrNotExist
+}
+
+func (fs *assetFs) Open(name string) (File, error) {
+	name = cleanPath(name)
+	if name == "" {
+		return root.open(""), nil
+	}
+	if dir, ok := didx[name]; ok {
+		return dir.open(name), nil
+	}
+	if asset, ok := fidx[name]; ok {
+		return asset.open(name), nil
+	}
+	return nil, os.ErrNotExist
+}
+func (fs *assetFs) HttpFileSystem() http.FileSystem {
+	return &httpFileSystem{fs: fs}
+}
+
 
 // A File is returned by virtual FileSystem's Open method.
 // The methods should behave the same as those on an *os.File.
@@ -157,145 +348,121 @@ type File interface {
 	io.Seeker
 	Readdir(count int) ([]os.FileInfo, error)
 	Stat() (os.FileInfo, error)
-	// The CopyTo method copies file content to the target path.
-	// If file with the same name, size and modification time exists,
-	// it will not be overwritten, unless overwrite = true is specified.
-	// site.Root().CopyTo(".", mode, false) will effectively
-	// extract content of the filesystem to the current directory (which
-	// makes it the most space-wise inefficient self-extracting archive
-	// ever).
-	CopyTo(target string, mode os.FileMode, overwrite bool) error
 }
 
-func (d *directoryAsset) Open(name string) (File, error) {
-	if len(name) > 0 && name[0] == '/' {
-		name = name[1:]
-	}
-	p := path.Clean(name)
-	if p == "." {
-		return &directoryAssetFile{dir: d}, nil
-	} else if name[0] == '/' {
-		name = name[1:]
-	}
-	var first, rest string
-	i := strings.IndexByte(p, '/')
-	if i == -1 {
-		first = p
+func (a *Asset) open(name string) File {
+	if a.isCompressed {
+		ret := &assetCompressedFile{
+			asset: a,
+			name:  name,
+		}
+		ret.Reset(bytes.NewReader(a.blob))
+		return ret
 	} else {
-		first = p[:i]
-		rest = p[i+1:]
-	}
-	for j := range d.dirs {
-		if d.dirs[j].name == first {
-			if rest == "" {
-				return &directoryAssetFile{dir: &d.dirs[j]}, nil
-			} else {
-				return d.dirs[j].Open(rest)
-			}
+		ret := &assetFile{
+			asset: a,
+			name:  name,
 		}
+		ret.Reset(a.blob)
+		return ret
 	}
-	if rest != "" {
-		return nil, os.ErrNotExist
+}
+
+func (d *directoryAsset) open(name string) File {
+	return &directoryAssetFile{
+		dir:  d,
+		name: name,
+		pos:  0,
 	}
-	for j := range d.files {
-		if d.files[j].name == first {
-			if d.files[j].isCompressed {
-				ret := &assetCompressedFile{asset: &d.files[j]}
-				ret.Reset(bytes.NewReader(d.files[j].blob))
-				return ret, nil
-			} else {
-				ret := &assetFile{asset: &d.files[j]}
-				ret.Reset(d.files[j].blob)
-				return ret, nil
-			}
-		}
-	}
-	return nil, os.ErrNotExist
 }
 
 type directoryAssetFile struct {
-	dir *directoryAsset
-	pos int
+	dir  *directoryAsset
+	name string
+	pos  int
+}
+
+func (d *directoryAssetFile) Name() string {
+	return d.name
+}
+
+func (d *directoryAssetFile) checkClosed() error {
+	if d.pos < 0 {
+		return os.ErrClosed
+	}
+	return nil
 }
 
 func (d *directoryAssetFile) Close() error {
-	if d.pos < 0 {
-		return os.ErrClosed
+	if err := d.checkClosed(); err != nil {
+		return err
 	}
 	d.pos = -1
 	return nil
 }
 
 func (d *directoryAssetFile) Read([]byte) (int, error) {
-	if d.pos < 0 {
-		return 0, os.ErrClosed
+	if err := d.checkClosed(); err != nil {
+		return 0, err
 	}
 	return 0, io.EOF
 }
 
 func (d *directoryAssetFile) Stat() (os.FileInfo, error) {
-	if d.pos < 0 {
-		return nil, os.ErrClosed
+	if err := d.checkClosed(); err != nil {
+		return nil, err
 	}
 	return d.dir, nil
 }
 
 func (d *directoryAssetFile) Seek(pos int64, whence int) (int64, error) {
-	if d.pos < 0 {
-		return 0, os.ErrClosed
+	if err := d.checkClosed(); err != nil {
+		return 0, err
 	}
-	if whence == io.SeekStart && pos == 0 {
-		d.pos = 0
-		return 0, nil
-	} else {
-		return 0, os.ErrInvalid
-	}
+	return 0, os.ErrInvalid
 }
 
 func (d *directoryAssetFile) Readdir(count int) ([]os.FileInfo, error) {
-	if d.pos < 0 {
-		return nil, os.ErrClosed
+	if err := d.checkClosed(); err != nil {
+		return nil, err
 	}
-	ret := make([]os.FileInfo, len(d.dir.dirs) + len(d.dir.files))
-	i := 0
-	for j := range d.dir.dirs {
-		ret[j + i] = &d.dir.dirs[j]
+	var (
+		last int
+		total = len(d.dir.dirs) + len(d.dir.files)
+	)
+	if d.pos > total {
+		if count > 0 {
+			return nil, io.EOF
+		} else {
+			return nil, nil
+		}
 	}
-	i = len(d.dir.dirs)
-	for j := range d.dir.files {
-		ret[j + i] = &d.dir.files[j]
-	}
-	if count <= 0 {
-		return ret, nil
-	} else if d.pos > len(ret) {
-		return nil, io.EOF
+	if count <= 0 || (d.pos + count) <= total {
+		last = total
 	} else {
-		return ret[d.pos:d.pos+count], nil
+		last = d.pos + count
 	}
-}
-
-func (d *directoryAsset) copyTo(target string, dirmode os.FileMode, mode os.FileMode, overwrite bool) error {
-	dname := filepath.Join(target, d.name)
-	err := os.MkdirAll(dname, dirmode)
-	if err != nil {
-		return err
-	}
-	for i := range d.dirs {
-		if err = d.dirs[i].copyTo(dname, dirmode, mode, overwrite); err != nil {
-			return err
+	ret := make([]os.FileInfo, 0, last - d.pos)
+	if d.pos < len(d.dir.dirs) {
+		var stop int
+		if last > len(d.dir.dirs) {
+			stop = len(d.dir.dirs)
+		} else {
+			stop = last
 		}
-	}
-	for i := range d.files {
-		if err = d.files[i].CopyTo(dname, mode, overwrite); err != nil {
-			return err
+		for i := d.pos; i < stop; i++ {
+			ret = append(ret, &d.dir.dirs[i])
 		}
+		d.pos = stop
 	}
-	return nil
-}
-
-func (d *directoryAssetFile) CopyTo(target string, mode os.FileMode, overwrite bool) error {
-	dirmode := ((mode&0444)>>2)|mode
-	return d.dir.copyTo(target, dirmode, mode, overwrite)
+	var start, stop int
+	start = d.pos - len(d.dir.dirs)
+	stop = last - len(d.dir.dirs)
+	for i := start; i < stop; i++ {
+		ret = append(ret, &d.dir.files[i])
+	}
+	d.pos = last
+	return ret, nil
 }
 
 func (d *directoryAsset) Name() string       { return d.name }
@@ -303,11 +470,16 @@ func (d *directoryAsset) Size() int64        { return 0 }
 func (d *directoryAsset) Mode() os.FileMode  { return os.ModeDir | 0555 }
 func (d *directoryAsset) ModTime() time.Time { return stamp }
 func (d *directoryAsset) IsDir() bool        { return true }
-func (d *directoryAsset) Sys() interface{}   { return nil }
+func (d *directoryAsset) Sys() interface{}   { return d }
 
 type assetFile struct {
 	assetReader
+	name string
 	asset *Asset
+}
+
+func (a *assetFile) Name() string {
+	return a.name
 }
 
 func (a *assetFile) Stat() (os.FileInfo, error) {
@@ -317,13 +489,14 @@ func (a *assetFile) Stat() (os.FileInfo, error) {
 func (a *assetFile) Readdir(int) ([]os.FileInfo, error) {
 	return nil, os.ErrInvalid
 }
-
-func (a *assetFile) CopyTo(target string, mode os.FileMode, overwrite bool) error {
-	return a.asset.CopyTo(target, mode, overwrite)
-}
 type assetCompressedFile struct {
 	gzip.Reader
+	name  string
 	asset *Asset
+}
+
+func (a *assetCompressedFile) Name() string {
+	return a.name
 }
 
 func (a *assetCompressedFile) Stat() (os.FileInfo, error) {
@@ -338,15 +511,166 @@ func (a *assetCompressedFile) Readdir(count int) ([]os.FileInfo, error) {
 	return nil, os.ErrInvalid
 }
 
-func (a *assetCompressedFile) CopyTo(target string, mode os.FileMode, overwrite bool) error {
-	return a.asset.CopyTo(target, mode, overwrite)
+type unionFs struct {
+	root string
 }
 
-var idx = make(map[string]*Asset)
+func NewUnionFS(src string) (FileSystem, error) {
+	abs, err := filepath.Abs(src)
+	if err != nil {
+		return nil, err
+	}
+	return &unionFs{
+		root: abs,
+	}, nil
+}
+
+func (fs *unionFs) Stat(name string) (os.FileInfo, error) {
+	name = cleanPath(name)
+	fname := filepath.Join(fs.root, filepath.FromSlash(name))
+	fi, err := os.Stat(fname)
+	if err == nil {
+		return fi, nil
+	}
+	return FS().Stat(name)
+}
+
+func (fs *unionFs) Open(name string) (File, error) {
+	name = cleanPath(name)
+	fname := filepath.Join(fs.root, filepath.FromSlash(name))
+	fi, err := os.Stat(fname)
+	if err == nil {
+		file, err := os.OpenFile(fname, os.O_RDONLY, 0)
+		if err == nil {
+			if !fi.IsDir() {
+				return &unionFsFile{
+					name: name,
+					file: file,
+				}, nil
+			} else {
+				dir, _ := didx[name]
+				return &unionFsDirectoryFile{
+					name:  name,
+					dir:   dir,
+					fsDir: file,
+					pos:   0,
+				}, nil
+			}
+		}
+	}
+	return FS().Open(name)
+}
+
+func (fs *unionFs) Walk(root string, walkFunc filepath.WalkFunc) error {
+	return walk(fs, root, walkFunc)
+}
+func (fs *unionFs) HttpFileSystem() http.FileSystem {
+	return &httpFileSystem{fs: fs}
+}
+
+type unionFsFile struct {
+	name string
+	file *os.File
+}
+
+func (f *unionFsFile) Name() string { return f.name }
+func (f *unionFsFile) Close() error { return f.file.Close() }
+func (f *unionFsFile) Read(d []byte) (int, error) { return f.file.Read(d) }
+func (f *unionFsFile) Stat() (os.FileInfo, error) { return f.file.Stat() }
+func (f *unionFsFile) Seek(pos int64, whence int) (int64, error) { return f.file.Seek(pos, whence) }
+func (f *unionFsFile) Readdir(count int) ([]os.FileInfo, error) { return f.file.Readdir(count) }
+
+type unionFsDirectoryFile struct {
+	name  string
+	dir   *directoryAsset
+	fsDir *os.File
+	pos   int
+}
+
+func (d *unionFsDirectoryFile) Name() string { return d.name }
+func (d *unionFsDirectoryFile) Close() error {
+	if d.fsDir == nil {
+		return os.ErrClosed
+	}
+	err := d.fsDir.Close()
+	d.fsDir = nil
+	return err
+}
+
+func (d *unionFsDirectoryFile) Read([]byte) (int, error) {
+	if d.fsDir == nil {
+		return 0, os.ErrClosed
+	}
+	return 0, io.EOF
+}
+
+func (d *unionFsDirectoryFile) Stat() (os.FileInfo, error) {
+	if d.fsDir == nil {
+		return nil, os.ErrClosed
+	}
+	return d.fsDir.Stat()
+}
+
+func (d *unionFsDirectoryFile) Seek(pos int64, whence int) (int64, error) {
+	if d.fsDir == nil {
+		return 0, os.ErrClosed
+	}
+	return 0, os.ErrInvalid
+}
+func (d *unionFsDirectoryFile) Readdir(count int) ([]os.FileInfo, error) {
+	if d.fsDir == nil {
+		return nil, os.ErrClosed
+	}
+	if d.pos < 0 {
+		if count > 0 {
+			return nil, io.EOF
+		} else {
+			return nil, nil
+		}
+	}
+	if d.dir == nil {
+		return d.fsDir.Readdir(count)
+	}
+	ret, err := d.fsDir.Readdir(count)
+	if count > 0 && err == nil {
+		return ret, err
+	}
+	embedded := make([]os.FileInfo, 0, len(d.dir.dirs) + len(d.dir.files))
+	for i := range d.dir.dirs {
+		embedded = append(embedded, &d.dir.dirs[i])
+	}
+	for i := range d.dir.files {
+		embedded = append(embedded, &d.dir.files[i])
+	}
+	for _, fi := range embedded[d.pos:] {
+		if count > 0 && len(ret) >= count {
+			return ret, nil
+		}
+		d.pos++
+		if _, err := os.Stat(filepath.Join(d.fsDir.Name(), fi.Name())); err == nil {
+			continue
+		}
+		ret = append(ret, fi)
+	}
+	d.pos = -1
+	return ret, nil
+}
+type httpFileSystem struct {
+	fs FileSystem
+}
+func (fs *httpFileSystem) Open(name string) (http.File, error) {
+	return fs.fs.Open(name)
+}
+func HttpFileSystem() http.FileSystem {
+	return FS().HttpFileSystem()
+}
+
+var fidx = make(map[string]*Asset)
+var didx = make(map[string]*directoryAsset)
 var stamp time.Time
 
 func init() {
-	stamp = time.Unix(1515566723,817118000)
+	stamp = time.Unix(1515748900, 818532000)
 	bb := blob_bytes(66432)
 	bs := blob_string(66432)
 	root = &directoryAsset{
@@ -401,12 +725,14 @@ func init() {
 			},
 		},
 	}
-	idx["css/style.css"] = &root.dirs[0].files[0]
-	idx["images/a-nice-picture.jpg"] = &root.dirs[1].files[0]
-	idx["404.html"] = &root.files[0]
+	didx[""] = root
+	didx["css"] = &root.dirs[0]
+	fidx["css/style.css"] = &root.dirs[0].files[0]
+	didx["images"] = &root.dirs[1]
+	fidx["images/a-nice-picture.jpg"] = &root.dirs[1].files[0]
+	fidx["404.html"] = &root.files[0]
 	http404Asset = &root.files[0]
-	idx["index.html"] = &root.files[1]
-	idx[""] = &root.files[1]
+	fidx["index.html"] = &root.files[1]
 }
 var http404Asset *Asset
 // ServeHTTP provides a convenience handler whenever embedded content should be served from the root URI.
@@ -430,8 +756,11 @@ func HTTPHandlerWithPrefix(prefix string) func(http.ResponseWriter, *http.Reques
 			reqPath = reqPath[1:]
 		}
 		var status = http.StatusOK
-		asset := Get(reqPath)
-		if asset == nil {
+		asset, ok := fidx[reqPath]
+		if !ok {
+			asset, ok = fidx[path.Join(reqPath, "index.html")]
+		}
+		if !ok {
 			asset = http404Asset
 			status = http.StatusNotFound
 		}
