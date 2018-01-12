@@ -1,5 +1,7 @@
 # go-imbed
 
+[![Build Status](https://travis-ci.org/growler/go-imbed.svg?branch=master)](https://travis-ci.org/growler/go-imbed)
+
 go-imbed is a simple tool for embedding binary assets into Go executable.
 
 ## Why
