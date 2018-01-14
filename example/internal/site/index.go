@@ -670,7 +670,7 @@ var didx = make(map[string]*directoryAsset)
 var stamp time.Time
 
 func init() {
-	stamp = time.Unix(1515753729, 537341000)
+	stamp = time.Unix(1515954503, 733095000)
 	bb := blob_bytes(66432)
 	bs := blob_string(66432)
 	root = &directoryAsset{
@@ -809,4 +809,3 @@ func HTTPHandlerWithPrefix(prefix string) func(http.ResponseWriter, *http.Reques
 		}
 	}
 }
-

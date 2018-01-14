@@ -275,6 +275,7 @@ func writeGoIndex(file io.Writer, testFile io.Writer, pkg string, root *director
 		"Date":          fmt.Sprintf("%d, %d", timestamp.Unix(), timestamp.Nanosecond()),
 		"Params":        flags,
 		"Has404Asset":   flags.BuildHttpHandlerAPI() && has404Asset,
+		"BuildMain":     pkg == "main" && flags.has(BuildMain),
 	}
 	err := iMustHazTemplate("index.go").Execute(&buf, params)
 	if err != nil {
@@ -321,24 +322,14 @@ func writeAsmIndex(target string) error {
 	return nil
 }
 
-func CopyBinaryTemplate(target string) error {
-	content := iMustHazFile("main.go")
-	dst, err := os.OpenFile(filepath.Join(target, "main.go"), os.O_CREATE | os.O_WRONLY, 0640)
-	if err != nil {
-		return err
-	}
-	defer dst.Close()
-	if _, err = dst.WriteString(content); err != nil {
-		return err
-	}
-	return nil
-}
-
 // Creates a Go package `pkgName` from `source` directory contents and puts code
 // into `target` location.
 func Imbed(source, target, pkgName string, flags ImbedFlag) error {
 	if flags.has(BuildHttpFsAPI|BuildUnionFsAPI) {
 		flags |= BuildFsAPI
+	}
+	if pkgName == "main" && flags.has(BuildMain) {
+		flags |= BuildFsAPI|BuildHttpHandlerAPI
 	}
 	err := os.MkdirAll(target, 0755)
 	if err != nil {

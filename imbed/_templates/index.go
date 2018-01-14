@@ -29,6 +29,9 @@ import (
 {{- if or .Params.BuildFsAPI .Params.CompressAssets }}
 	"io/ioutil"
 {{- end }}
+{{- if .Params.BuildMain }}
+	"flag"
+{{- end }}
 	"time"
 )
 
@@ -837,4 +840,71 @@ func HTTPHandlerWithPrefix(prefix string) func(http.ResponseWriter, *http.Reques
 		}
 	}
 }
-{{end}}
+{{- end}}
+
+{{- if .Params.BuildMain }}
+var (
+	listenAddr string
+	cert       string
+	key        string
+	extract    string
+	list       bool
+	help       bool
+)
+
+func init() {
+	flag.BoolVar(&help, "help", false, "prints help")
+	flag.BoolVar(&list, "list", false, "list contents and exit")
+	flag.StringVar(&extract, "extract", "", "extract contents to the target `directory` and exit")
+	flag.StringVar(&listenAddr, "listen", ":8080", "socket `address` to listen")
+	flag.StringVar(&cert, "tls-cert", "", "TLS certificate `file` to use")
+	flag.StringVar(&key, "tls-key", "", "TLS key `file` to use")
+}
+
+func main() {
+	var tls bool
+	var err error
+	flag.Parse()
+	if help {
+		flag.Usage()
+		return
+	}
+	if list {
+		FS().Walk("", func(path string, info os.FileInfo, err error) error {
+			if info.IsDir() {
+				return nil
+			}
+			os.Stdout.WriteString(path)
+			os.Stdout.WriteString("\n")
+			return nil
+		})
+		return
+	}
+	if extract != "" {
+		if err = CopyTo(extract, 0640, false); err != nil {
+			os.Stderr.WriteString("error extracting content: ")
+			os.Stderr.WriteString(err.Error())
+			os.Stderr.WriteString("\n")
+			os.Exit(1)
+		}
+		return
+	}
+	if cert != "" && key != "" {
+		tls = true
+	} else if cert != "" || key != "" {
+		os.Stderr.WriteString("both cert and key must be supplied for HTTPS\n")
+		os.Exit(1)
+	}
+	http.HandleFunc("/", HTTPHandlerWithPrefix("/"))
+	if tls {
+		err = http.ListenAndServeTLS(listenAddr, cert, key, nil)
+	} else {
+		err = http.ListenAndServe(listenAddr, nil)
+	}
+	if err != nil {
+		os.Stderr.WriteString(err.Error())
+		os.Stderr.WriteString("\n")
+		os.Exit(1)
+	}
+}
+{{ end }}

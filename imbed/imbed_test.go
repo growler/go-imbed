@@ -31,7 +31,7 @@ func rmtree(name string) {
 	}
 }
 
-func TestGenerate(t *testing.T) {
+func TestGenerateNoMain(t *testing.T) {
 	tmp, err := ioutil.TempDir(os.TempDir(), "go-imbed-test")
 	if err != nil {
 		t.Fatal(err)
@@ -59,6 +59,9 @@ func main() {
 	}
 	targetPkg := filepath.Join(tmp, "src", "pkg", "internal", "data")
 	for i := 0; i < (1 << maxFlag); i++ {
+		if ImbedFlag(i).has(BuildMain) {
+			continue
+		}
 		cmd := exec.Command("go", "install", "pkg")
 		cmd.Env = append(os.Environ(), "GOPATH="+tmp)
 		cmd.Dir = tmp
@@ -84,3 +87,44 @@ func main() {
 		}
 	}
 }
+
+func TestGenerateMain(t *testing.T) {
+	tmp, err := ioutil.TempDir(os.TempDir(), "go-imbed-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// defer rmtree(tmp)
+	pkgDir := filepath.Join(tmp, "src", "main")
+	err = os.MkdirAll(pkgDir, 0700)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < (1 << maxFlag); i++ {
+		if !ImbedFlag(i).has(BuildMain) {
+			continue
+		}
+		cmd := exec.Command("go", "install", "main")
+		cmd.Env = append(os.Environ(), "GOPATH="+tmp)
+		cmd.Dir = tmp
+		flags := ImbedFlag(i)
+		err := Imbed("../example/site", pkgDir, "main", flags)
+		if err != nil {
+			t.Fatalf("error embedding with flags %s: %s", flags.String(), err)
+		}
+		cmd.Stderr = os.Stderr
+		cmd.Stdout = os.Stdout
+		err = cmd.Run()
+		if err != nil {
+			t.Fatalf("error compiling target with flags %s\n", flags.String())
+		}
+		cmd = exec.Command(filepath.Join(tmp, "bin", "main"), "-list")
+		cmd.Dir = tmp
+		err = cmd.Run()
+		if err != nil {
+			t.Fatalf("error running target with flags %s\n", flags.String())
+		}
+	}
+	rmtree(filepath.Join(tmp, "src"))
+
+}
+

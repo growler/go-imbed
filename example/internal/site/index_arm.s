@@ -3,7 +3,7 @@
 #include "textflag.h"
 
 TEXT ·blob_bytes(SB),NOSPLIT,$0-4
-	MOVW	·d(SB), R0
+	MOVW	$·d(SB), R0
 	MOVW	R0, ret+4(FP)
 	MOVW	len+0(FP), R0
 	MOVW	R0, ret+8(FP)
@@ -11,7 +11,7 @@ TEXT ·blob_bytes(SB),NOSPLIT,$0-4
 	RET
 
 TEXT ·blob_string(SB),NOSPLIT,$0-4
-	MOVW	·d(SB), R0
+	MOVW	$·d(SB), R0
 	MOVW	R0, ret+4(FP)
 	MOVW	len+0(FP), R0
 	MOVW	R0, ret+8(FP)

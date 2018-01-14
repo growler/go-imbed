@@ -63,12 +63,13 @@ var (
 	enableRawBytes     bool
 	pkgName            string
 	makeBinary         bool
+	help               bool
 )
 
 func init() {
 
 	cli = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
-
+	cli.BoolVar(&help, "help", false, "prints help")
 	cli.StringVar(&pkgName, "pkg", "", "package name (if not set, the basename of the <target-package-path> will be used)")
 	cli.BoolVar(&disableCompression, "no-compression", false, "disable compression even for compressible files")
 	cli.BoolVar(&disableHTTPHandler, "no-http-handler", false, "disable http handler API")
@@ -87,7 +88,7 @@ func init() {
 
 func main() {
 	err := cli.Parse(os.Args[1:])
-	if err != nil || cli.NArg() != 2 {
+	if err != nil || cli.NArg() != 2 || help {
 		var opts bytes.Buffer
 		cli.SetOutput(&opts)
 		cli.PrintDefaults()
@@ -95,7 +96,11 @@ func main() {
 			"Binary":  os.Args[0],
 			"Options": opts.String(),
 		})
-		os.Exit(1)
+		if !help {
+			os.Exit(2)
+		} else {
+			return
+		}
 	}
 	source := cli.Arg(0)
 	target := cli.Arg(1)
@@ -121,7 +126,7 @@ func do(source, target string) error {
 		defer rmtree(buildDir)
 		targetDir = filepath.Join(buildDir, "src", "main")
 		pkgName = "main"
-		flags = imbed.BuildFsAPI | imbed.BuildHttpHandlerAPI | imbed.CompressAssets
+		flags = imbed.BuildMain | imbed.BuildFsAPI | imbed.BuildHttpHandlerAPI | imbed.CompressAssets
 	} else {
 		targetDir = target
 		if pkgName == "" {
@@ -139,9 +144,6 @@ func do(source, target string) error {
 		return err
 	}
 	if makeBinary {
-		if err = imbed.CopyBinaryTemplate(targetDir); err != nil {
-			return err
-		}
 		cmd := exec.Command("go", "install", "main")
 		cmd.Env = append(os.Environ(), "GOPATH="+buildDir)
 		cmd.Dir = buildDir
