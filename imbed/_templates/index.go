@@ -742,7 +742,7 @@ var didx = make(map[string]*directoryAsset)
 var stamp time.Time
 
 func init() {
-	stamp = time.Unix({{.Date}})
+	stamp = time.Unix({{.Date}}).UTC()
 	bb := blob_bytes({{.Size}})
 	bs := blob_string({{.Size}})
 {{ .DirectoryCode -}}
@@ -799,7 +799,7 @@ func HTTPHandlerWithPrefix(prefix string) func(http.ResponseWriter, *http.Reques
 			}
 		}
 		if mtime := req.Header.Get("If-Modified-Since"); mtime != "" {
-			if ts, err := time.Parse(time.RFC1123, mtime); err == nil && !ts.Before(stamp) {
+			if ts, err := http.ParseTime(mtime); err == nil && !ts.Before(stamp) {
 				w.WriteHeader(http.StatusNotModified)
 				return
 			}
@@ -825,7 +825,7 @@ func HTTPHandlerWithPrefix(prefix string) func(http.ResponseWriter, *http.Reques
 {{- end }}
 		w.Header().Set("Content-Type", asset.mime)
 		w.Header().Set("Etag", strconv.Quote(asset.tag))
-		w.Header().Set("Last-Modified", stamp.Format(time.RFC1123))
+		w.Header().Set("Last-Modified", stamp.Format(http.TimeFormat))
 		w.WriteHeader(status)
 		if req.Method != "HEAD" {
 {{- if .Params.CompressAssets }}
