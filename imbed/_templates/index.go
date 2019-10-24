@@ -44,7 +44,7 @@ type Asset struct {
 	name         string // File name
 	size         int32  // File size (uncompressed)
 	blob         []byte // Resource blob []byte
-	str_blob     string // Resource blob as string
+	str_blob     string // Resource blob as a string
 {{- if .Params.CompressAssets }}
 	isCompressed bool   // true if resources was compressed with gzip
 {{- end}}
@@ -56,6 +56,8 @@ type Asset struct {
 func (a *Asset) Name() string       { return a.name }
 // MimeType returns MIME Type of the asset
 func (a *Asset) MimeType() string   { return a.mime }
+// Tag returns a string which can serve as an unique version identifier for the asset (i.e., "Etag")
+func (a *Asset) Tag() string        { return a.tag  }
 {{- if .Params.CompressAssets }}
 // IsCompressed returns true of asset has been compressed
 func (a *Asset) IsCompressed() bool { return a.isCompressed }

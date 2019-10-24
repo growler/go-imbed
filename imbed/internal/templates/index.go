@@ -24,7 +24,7 @@ type Asset struct {
 	name         string // File name
 	size         int32  // File size (uncompressed)
 	blob         []byte // Resource blob []byte
-	str_blob     string // Resource blob as string
+	str_blob     string // Resource blob as a string
 	isCompressed bool   // true if resources was compressed with gzip
 	mime         string // MIME Type
 	tag          string // Tag is essentially a Tag of resource content and can be used as a value for "Etag" HTTP header
@@ -34,6 +34,8 @@ type Asset struct {
 func (a *Asset) Name() string       { return a.name }
 // MimeType returns MIME Type of the asset
 func (a *Asset) MimeType() string   { return a.mime }
+// Tag returns a string which can serve as an unique version identifier for the asset (i.e., "Etag")
+func (a *Asset) Tag() string        { return a.tag  }
 // IsCompressed returns true of asset has been compressed
 func (a *Asset) IsCompressed() bool { return a.isCompressed }
 // String returns (uncompressed, if necessary) content of asset as a string
@@ -504,24 +506,24 @@ var didx = make(map[string]*directoryAsset)
 var stamp time.Time
 
 func init() {
-	stamp = time.Unix(1515954504, 258631000)
-	bb := blob_bytes(9760)
-	bs := blob_string(9760)
+	stamp = time.Unix(1571908442, 807852000)
+	bb := blob_bytes(9816)
+	bs := blob_string(9816)
 	root = &directoryAsset{
 		files: []Asset{
 			{
 				name:         "index.go",
-				blob:         bb[0:5720],
-				str_blob:     bs[0:5720],
+				blob:         bb[0:5775],
+				str_blob:     bs[0:5775],
 				mime:         "text/x-golang; charset=utf-8",
-				tag:          "6c25pdwdxabfs",
-				size:         21623,
+				tag:          "xomyf7cjnm7zq",
+				size:         21780,
 				isCompressed: true,
 			},
 			{
 				name:         "index_386.s",
-				blob:         bb[5720:5917],
-				str_blob:     bs[5720:5917],
+				blob:         bb[5776:5973],
+				str_blob:     bs[5776:5973],
 				mime:         "text/x-asm; charset=utf-8",
 				tag:          "ihibzfvzsneuc",
 				size:         327,
@@ -529,8 +531,8 @@ func init() {
 			},
 			{
 				name:         "index_amd64.s",
-				blob:         bb[5920:6128],
-				str_blob:     bs[5920:6128],
+				blob:         bb[5976:6184],
+				str_blob:     bs[5976:6184],
 				mime:         "text/x-asm; charset=utf-8",
 				tag:          "dcfwghvd5ccho",
 				size:         361,
@@ -538,8 +540,8 @@ func init() {
 			},
 			{
 				name:         "index_arm.s",
-				blob:         bb[6128:6321],
-				str_blob:     bs[6128:6321],
+				blob:         bb[6184:6377],
+				str_blob:     bs[6184:6377],
 				mime:         "text/x-asm; charset=utf-8",
 				tag:          "2kykitl4umpta",
 				size:         329,
@@ -547,8 +549,8 @@ func init() {
 			},
 			{
 				name:         "index_arm64.s",
-				blob:         bb[6328:6528],
-				str_blob:     bs[6328:6528],
+				blob:         bb[6384:6584],
+				str_blob:     bs[6384:6584],
 				mime:         "text/x-asm; charset=utf-8",
 				tag:          "xsewb4p6f52nu",
 				size:         331,
@@ -556,8 +558,8 @@ func init() {
 			},
 			{
 				name:         "index_mips64x.s",
-				blob:         bb[6528:6750],
-				str_blob:     bs[6528:6750],
+				blob:         bb[6584:6806],
+				str_blob:     bs[6584:6806],
 				mime:         "text/x-asm; charset=utf-8",
 				tag:          "srpac746plm5g",
 				size:         370,
@@ -565,8 +567,8 @@ func init() {
 			},
 			{
 				name:         "index_mipsx.s",
-				blob:         bb[6752:6971],
-				str_blob:     bs[6752:6971],
+				blob:         bb[6808:7027],
+				str_blob:     bs[6808:7027],
 				mime:         "text/x-asm; charset=utf-8",
 				tag:          "itgddt77jfjk6",
 				size:         364,
@@ -574,8 +576,8 @@ func init() {
 			},
 			{
 				name:         "index_ppc64x.s",
-				blob:         bb[6976:7191],
-				str_blob:     bs[6976:7191],
+				blob:         bb[7032:7247],
+				str_blob:     bs[7032:7247],
 				mime:         "text/x-asm; charset=utf-8",
 				tag:          "aatq7i5ygiqoy",
 				size:         356,
@@ -583,8 +585,8 @@ func init() {
 			},
 			{
 				name:         "index_s390x.s",
-				blob:         bb[7192:7410],
-				str_blob:     bs[7192:7410],
+				blob:         bb[7248:7466],
+				str_blob:     bs[7248:7466],
 				mime:         "text/x-asm; charset=utf-8",
 				tag:          "ml3wgknpogqt6",
 				size:         313,
@@ -592,8 +594,8 @@ func init() {
 			},
 			{
 				name:         "index_test.go",
-				blob:         bb[7416:9754],
-				str_blob:     bs[7416:9754],
+				blob:         bb[7472:9810],
+				str_blob:     bs[7472:9810],
 				mime:         "text/x-golang; charset=utf-8",
 				tag:          "3nfezi3r4tdnc",
 				size:         10851,
